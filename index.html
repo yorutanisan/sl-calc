@@ -31,6 +31,27 @@ button,input{touch-action:manipulation}
 [hidden]{display:none!important}
 .seg.three{grid-template-columns:repeat(3,1fr)}
 .pctrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pick{display:flex;width:100%;align-items:center;justify-content:space-between;gap:8px;border:0;background:transparent;color:var(--ink);font-family:var(--f-body);padding:0;cursor:pointer;text-align:left;min-height:44px}
+.pick:focus-visible,.rk-row:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.pk-main{display:flex;flex-direction:column;min-width:0}
+.pk-lbl{font-size:12px;color:var(--muted);letter-spacing:.04em}
+#pickName{font-size:16px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pk-arrow{color:var(--muted);font-size:18px;transition:transform .15s}
+.pick[aria-expanded="true"] .pk-arrow{transform:rotate(180deg)}
+.rk-meta{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin:10px 0 6px}
+.rk-meta .copy{margin-left:0}
+.rk{list-style:none;margin:0;padding:0}
+.rk li+li{border-top:1px solid var(--line)}
+.rk-row{display:grid;grid-template-columns:22px minmax(0,1fr) auto auto;gap:8px;align-items:center;width:100%;border:0;background:transparent;color:var(--ink);font-family:var(--f-body);padding:8px 4px;text-align:left;cursor:pointer;min-height:48px;border-radius:6px}
+.rk-row:hover,.rk-row.sel{background:var(--accent-soft)}
+.rk-n{font-family:var(--f-num);color:var(--muted);font-size:13px;text-align:right}
+.rk-name{font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rk-name small{display:block;font-family:var(--f-num);font-size:11px;color:var(--muted);font-weight:400}
+.rk-px{font-family:var(--f-num);font-size:14px;text-align:right}
+.rk-px small{display:block;font-size:11px;color:var(--muted)}
+.rk-px small.up{color:var(--gain)} .rk-px small.down{color:var(--loss)}
+.rk-vol{font-family:var(--f-num);font-size:12px;color:var(--muted);text-align:right;min-width:58px}
+.rk-empty{font-size:13px;color:var(--muted);padding:8px 2px;margin:0}
 .fixed{display:flex;align-items:center;justify-content:space-between;gap:6px;border:1.5px solid var(--line);border-radius:8px;background:var(--bg);padding:8px 12px}
 .fk{font-size:13px;color:var(--muted)}
 .fv{font-family:var(--f-num);font-size:22px;font-weight:600}
@@ -116,6 +137,18 @@ details summary{cursor:pointer;font-size:13px;color:var(--muted)}
     <h1>損切りライン計算</h1>
     <p class="sub" id="subText">エントリー価格と損切り価格を入れると、利確ラインがすぐに出ます</p>
   </header>
+
+  <section class="panel" id="rankPanel">
+    <button type="button" class="pick" id="pickBtn" aria-expanded="false" aria-controls="rankWrap">
+      <span class="pk-main"><span class="pk-lbl">銘柄（東証プライム 出来高上位20）</span><span id="pickName">タップして選ぶ</span></span>
+      <span class="pk-arrow" aria-hidden="true">▾</span>
+    </button>
+    <div id="rankWrap" hidden>
+      <div class="rk-meta"><span id="rankAsof">読み込み中…</span><button type="button" class="copy" id="rankReload">更新</button></div>
+      <ol class="rk" id="rankList"></ol>
+      <p class="note">選ぶと、その時点の株価（約20分遅れ）がエントリー価格に入り、TOPIX500の設定も自動で切り替わります。実際の約定価格に直してから使ってください。</p>
+    </div>
+  </section>
 
   <section class="panel">
     <div class="seg three" role="group" aria-label="計算のしかた">
@@ -412,6 +445,39 @@ details summary{cursor:pointer;font-size:13px;color:var(--muted)}
     var fallback=function(){var r=document.createRange();r.selectNodeContents($('big'));var sel=getSelection();sel.removeAllRanges();sel.addRange(r);$('copyBtn').textContent='選択しました';reset()};
     try{navigator.clipboard.writeText(txt).then(function(){$('copyBtn').textContent='コピーしました';reset()},fallback)}catch(e){fallback()}
   };
+  // ---- 東証プライム 出来高上位20（ranking.json は GitHub Actions が取引時間中10分おきに更新）
+  var rank=[], selCode=null;
+  function fvol(v){return v>=1e8?(v/1e8).toFixed(1)+'億株':v>=1e4?Math.round(v/1e4).toLocaleString('ja-JP')+'万株':v.toLocaleString('ja-JP')+'株'}
+  function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+  function renderRank(){
+    if(!rank.length){$('rankList').innerHTML='<li><p class="rk-empty">データがありません</p></li>';return}
+    $('rankList').innerHTML=rank.map(function(r,i){var c=+r.changePct||0;
+      return '<li><button type="button" class="rk-row'+(r.code===selCode?' sel':'')+'" data-i="'+i+'">'+
+        '<span class="rk-n">'+(i+1)+'</span>'+
+        '<span class="rk-name">'+esc(r.name)+'<small>'+esc(r.code)+'</small></span>'+
+        '<span class="rk-px">'+fp(+r.price)+'<small class="'+(c>0?'up':c<0?'down':'')+'">'+(c>0?'+':c<0?'−':'')+Math.abs(c).toFixed(2)+'%</small></span>'+
+        '<span class="rk-vol">'+fvol(+r.volume)+'</span></button></li>'}).join('');
+  }
+  function loadRank(){
+    $('rankAsof').textContent='読み込み中…';
+    fetch('ranking.json?t='+Date.now(),{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}).then(function(d){
+      rank=Array.isArray(d.items)?d.items:[]; renderRank();
+      var a=d.asof?new Date(d.asof):null, z=function(n){return ('0'+n).slice(-2)};
+      $('rankAsof').textContent=a&&!isNaN(a)?(a.getMonth()+1)+'/'+a.getDate()+' '+z(a.getHours())+':'+z(a.getMinutes())+' 時点（約20分遅れ）':'時刻不明';
+    }).catch(function(){$('rankAsof').textContent='取得できませんでした（電波を確認して「更新」）'});
+  }
+  function toggleRank(open){$('rankWrap').hidden=!open;$('pickBtn').setAttribute('aria-expanded',open?'true':'false')}
+  $('pickBtn').onclick=function(){var open=$('rankWrap').hidden;toggleRank(open);if(open&&!rank.length)loadRank()};
+  $('rankReload').onclick=loadRank;
+  $('rankList').addEventListener('click',function(ev){
+    var b=ev.target.closest('.rk-row'); if(!b)return; var r=rank[+b.dataset.i]; if(!r)return;
+    selCode=r.code; $('entry').value=raw(+r.price); $('t500').checked=!!r.t500;
+    $('pickName').textContent=r.name+'（'+r.code+'）';
+    toggleRank(false); renderRank(); calc();
+    try{$('rankPanel').scrollIntoView({behavior:'smooth',block:'start'})}catch(e){}
+  });
+  loadRank();
+
   $('x').value=st.mode==='stop'?st.xStop:st.xTp;
   paint(); calc();
   try{$('entry').focus()}catch(e){}

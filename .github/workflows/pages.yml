@@ -1,0 +1,66 @@
+name: ランキング更新と公開
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "*/10 0-6 * * 1-5"   # 平日 9:00〜15:50（日本時間）に10分おき。GitHub の都合で数分〜十数分遅れることがある
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        if: github.event_name != 'push'
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/requirements.txt
+
+      - name: 出来高ランキングを取得
+        id: rank
+        if: github.event_name != 'push'
+        run: |
+          pip install -q -r scripts/requirements.txt
+          python scripts/update_ranking.py
+          if git diff --quiet -- ranking.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add ranking.json
+            git commit -q -m "ランキング更新"
+            git push -q
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 公開するファイルをまとめる
+        if: github.event_name == 'push' || steps.rank.outputs.changed == 'true'
+        run: |
+          mkdir _site
+          cp index.html manifest.webmanifest sw.js ranking.json icon-*.png .nojekyll _site/
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name == 'push' || steps.rank.outputs.changed == 'true'
+        with:
+          path: _site
+
+      - uses: actions/deploy-pages@v4
+        id: deploy
+        if: github.event_name == 'push' || steps.rank.outputs.changed == 'true'
