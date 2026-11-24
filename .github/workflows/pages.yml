@@ -7,22 +7,18 @@ on:
     - cron: "*/10 0-6 * * 1-5"   # 平日 9:00〜15:50（日本時間）に10分おき。GitHub の都合で数分〜十数分遅れることがある
   workflow_dispatch:
 
-permissions:
-  contents: write
-  pages: write
-  id-token: write
-
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
-  build-deploy:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+    permissions:
+      contents: write
+    outputs:
+      deploy: ${{ steps.flag.outputs.deploy }}
     steps:
       - uses: actions/checkout@v4
 
@@ -50,17 +46,32 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: 公開するかどうか
+        id: flag
+        run: echo "deploy=${{ github.event_name == 'push' || steps.rank.outputs.changed == 'true' }}" >> "$GITHUB_OUTPUT"
+
       - name: 公開するファイルをまとめる
-        if: github.event_name == 'push' || steps.rank.outputs.changed == 'true'
+        if: steps.flag.outputs.deploy == 'true'
         run: |
           mkdir _site
           cp index.html manifest.webmanifest sw.js ranking.json icon-*.png .nojekyll _site/
 
       - uses: actions/upload-pages-artifact@v3
-        if: github.event_name == 'push' || steps.rank.outputs.changed == 'true'
+        if: steps.flag.outputs.deploy == 'true'
         with:
           path: _site
 
+  deploy:
+    needs: build
+    if: needs.build.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
       - uses: actions/deploy-pages@v4
         id: deploy
-        if: github.event_name == 'push' || steps.rank.outputs.changed == 'true'
