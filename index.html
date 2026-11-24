@@ -29,6 +29,37 @@
 html,body{margin:0;-webkit-text-size-adjust:100%}
 button,input{touch-action:manipulation}
 [hidden]{display:none!important}
+:root{--c-ma5:#B7791F;--c-ma25:#2453C9;--c-ma75:#7C3AED;--c-vwap:#DB2777}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--c-ma5:#F2C14E;--c-ma25:#86A8FF;--c-ma75:#B794F6;--c-vwap:#F472B6}}
+:root[data-theme="dark"]{--c-ma5:#F2C14E;--c-ma25:#86A8FF;--c-ma75:#B794F6;--c-vwap:#F472B6}
+.tp-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+.tp-head h2{margin:0;font-size:15px;color:var(--ink);font-weight:700;letter-spacing:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.verdict{flex-shrink:0;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--bg);color:var(--muted)}
+.verdict.pos{background:var(--gain-soft);color:var(--gain)} .verdict.neg{background:var(--loss-soft);color:var(--loss)}
+.tchart{width:100%;height:240px}
+.tchart svg{display:block}
+.tchart .gl{stroke:var(--line);stroke-width:1}
+.tchart .sep{stroke:var(--muted);stroke-width:1;stroke-dasharray:2 3;opacity:.6}
+.tchart .ax{fill:var(--muted);font-family:var(--f-num);font-size:10px}
+.tchart .cu{fill:var(--gain);stroke:var(--gain)} .tchart .cd{fill:var(--loss);stroke:var(--loss)}
+.tchart path{fill:none;stroke-width:1.5;stroke-linejoin:round}
+.tchart .l-ma5{stroke:var(--c-ma5)} .tchart .l-ma25{stroke:var(--c-ma25)} .tchart .l-ma75{stroke:var(--c-ma75)} .tchart .l-vwap{stroke:var(--c-vwap);stroke-width:2}
+.tchart .hl{stroke-width:1.2;stroke-dasharray:5 4}
+.tchart .h-e{stroke:var(--muted)} .tchart .h-s{stroke:var(--loss)} .tchart .h-t{stroke:var(--gain)}
+.tchart .ht{font-family:var(--f-num);font-size:10px;font-weight:600}
+.tchart .ht.h-e{fill:var(--muted);stroke:none} .tchart .ht.h-s{fill:var(--loss);stroke:none} .tchart .ht.h-t{fill:var(--gain);stroke:none}
+.tchart .msg{fill:var(--muted);font-size:13px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--muted);margin:6px 0 0}
+.legend i{display:inline-block;width:14px;border-top:2px solid;vertical-align:middle;margin-right:4px}
+.legend i.dash{border-top-style:dashed}
+.stats.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.stats.three .v{font-size:15px}
+.sigs{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.sigs li{display:grid;grid-template-columns:30px 1fr;gap:1px 8px;background:var(--bg);border-radius:8px;padding:8px 10px}
+.sigs .pt{grid-row:span 2;font-family:var(--f-num);font-weight:600;font-size:13px;text-align:center;align-self:center}
+.sigs .pt.pos{color:var(--gain)} .sigs .pt.neg{color:var(--loss)} .sigs .pt.zero{color:var(--muted)}
+.sigs b{font-size:13px;font-weight:600}
+.sigs span{font-size:12px;color:var(--muted)}
 .seg.three{grid-template-columns:repeat(3,1fr)}
 .pctrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .pick{display:flex;width:100%;align-items:center;justify-content:space-between;gap:8px;border:0;background:transparent;color:var(--ink);font-family:var(--f-body);padding:0;cursor:pointer;text-align:left;min-height:44px}
@@ -224,6 +255,19 @@ details summary{cursor:pointer;font-size:13px;color:var(--muted)}
     <div id="warns"></div>
   </section>
 
+  <section class="panel" id="techPanel" hidden aria-live="polite">
+    <div class="tp-head"><h2 id="techTitle">テクニカル</h2><span class="verdict" id="techVerdict"></span></div>
+    <div class="seg" role="group" aria-label="足の種類">
+      <button type="button" id="tf5" aria-pressed="true">5分足（前日〜今日）</button>
+      <button type="button" id="tfD" aria-pressed="false">日足（3か月）</button>
+    </div>
+    <div class="tchart" id="techChart"></div>
+    <div class="legend" id="techLegend"></div>
+    <div class="stats three" id="techLevels"></div>
+    <ul class="sigs" id="techSigs"></ul>
+    <p class="note" id="techNote" style="margin-top:10px"></p>
+  </section>
+
   <section class="panel" id="tblPanel">
     <h2 id="tblTitle">リスクリワード別の利確ライン（タップで切り替え）</h2>
     <div style="overflow-x:auto">
@@ -261,6 +305,7 @@ details summary{cursor:pointer;font-size:13px;color:var(--muted)}
 (function(){
   var RRS=[1,1.5,2,3], WIDTHS=[5,10,15,20,30];
   var $=function(id){return document.getElementById(id)};
+  var lastLines=null, techData=null, techCode=null, techTf='m5', techErr='';
   var st={mode:'pct',side:'long',rr:1.5,shares:100,auto:true,riskPct:1,fund:500000,t500:false,xTp:'2635',xStop:'2660',stopPct:0.3,tpPct:0.2};
   try{
     var s=JSON.parse(localStorage.getItem('slcalc3')||'null');
@@ -354,7 +399,9 @@ details summary{cursor:pointer;font-size:13px;color:var(--muted)}
     $('warns').innerHTML=warn?'<div class="warn">'+warn+'</div>':''; $('autoHint').textContent='';
   }
 
-  function calc(){
+  function calc(){calc0();renderTechChart()}
+  function calc0(){
+    lastLines=null;
     rrBtns.forEach(function(b,i){b.setAttribute('aria-pressed',RRS[i]===st.rr?'true':'false')});
     st.fund=Math.max(0,num($('fund').value)||0); st.riskPct=Math.max(0,num($('riskPct').value)||0);
     st.t500=$('t500').checked; st.auto=$('auto').checked;
@@ -405,6 +452,7 @@ details summary{cursor:pointer;font-size:13px;color:var(--muted)}
       warns.push('幅が狭すぎて、この比率では値段を置けません。比率を下げるか、幅を広げてください。');
     } else {
       $('big').textContent=fp((tpMode&&!pctMode)?o.tp:o.stop);
+      lastLines={e:e,stop:o.stop,tp:o.tp};
       $('big2').textContent=fp(o.tp);
       var actual=reward/risk;
       $('orderText').innerHTML=(o.long?'返済売り':'返済買い')+'：逆指値付通常注文　指値 <b class="num">'+fp(o.tp)+'円</b> ／ 逆指値 <b class="num">'+fp(o.stop)+'円'+(o.long?'以下':'以上')+'</b>で成行'+
@@ -473,10 +521,96 @@ details summary{cursor:pointer;font-size:13px;color:var(--muted)}
     var b=ev.target.closest('.rk-row'); if(!b)return; var r=rank[+b.dataset.i]; if(!r)return;
     selCode=r.code; $('entry').value=raw(+r.price); $('t500').checked=!!r.t500;
     $('pickName').textContent=r.name+'（'+r.code+'）';
-    toggleRank(false); renderRank(); calc();
+    toggleRank(false); renderRank(); loadTech(r.code, r.name); calc();
     try{$('rankPanel').scrollIntoView({behavior:'smooth',block:'start'})}catch(e){}
   });
   loadRank();
+
+  // ---- テクニカル（tech/<コード>.json：5分足と日足、ルールベースの判定）
+  function loadTech(code,name){
+    techCode=code; techData=null; techErr='読み込み中…';
+    $('techPanel').hidden=false; $('techTitle').textContent='テクニカル：'+name+'（'+code+'）';
+    renderTech();
+    fetch('tech/'+encodeURIComponent(code)+'.json?t='+Date.now(),{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}).then(function(d){
+      if(techCode!==code)return; techData=d; techErr=''; renderTech();
+    }).catch(function(){if(techCode!==code)return; techErr='テクニカルのデータを取得できませんでした（電波を確認して銘柄を選び直してください）'; renderTech()});
+  }
+  function setTf(tf){techTf=tf;$('tf5').setAttribute('aria-pressed',tf==='m5'?'true':'false');$('tfD').setAttribute('aria-pressed',tf==='d'?'true':'false');renderTech()}
+  $('tf5').onclick=function(){setTf('m5')}; $('tfD').onclick=function(){setTf('d')};
+  function z2(n){return ('0'+n).slice(-2)}
+  function renderTech(){
+    var s=techData&&techData[techTf], a=s&&s.analysis, v=$('techVerdict');
+    if(!s){
+      v.textContent=''; v.className='verdict';
+      $('techLegend').innerHTML=''; $('techLevels').innerHTML=''; $('techSigs').innerHTML='';
+      $('techNote').textContent=techErr||(techData?'この足のデータがありません':'');
+      renderTechChart(); return;
+    }
+    v.textContent=a.verdict+'（'+(a.score>0?'+':'')+a.score+'）'; v.className='verdict'+(a.score>0?' pos':a.score<0?' neg':'');
+    var lg=techTf==='m5'
+      ?[['l-vwap','VWAP'],['l-ma5','5本線'],['l-ma25','25本線'],['h-e dash','エントリー'],['h-s dash','損切り'],['h-t dash','利確']]
+      :[['l-ma5','5日線'],['l-ma25','25日線'],['l-ma75','75日線']];
+    var col={'l-vwap':'var(--c-vwap)','l-ma5':'var(--c-ma5)','l-ma25':'var(--c-ma25)','l-ma75':'var(--c-ma75)','h-e':'var(--muted)','h-s':'var(--loss)','h-t':'var(--gain)'};
+    $('techLegend').innerHTML=lg.map(function(x){var k=x[0].split(' ');return '<span><i class="'+(k[1]||'')+'" style="border-color:'+col[k[0]]+'"></i>'+x[1]+'</span>'}).join('');
+    var L=[], last=function(arr){for(var i=arr.length-1;i>=0;i--)if(arr[i]!=null)return arr[i];return null};
+    if(techTf==='m5'){var lv=s.levels||{};L=[['当日高値',lv.dayHigh],['当日安値',lv.dayLow],['VWAP',lv.vwap],['前日終値',lv.prevClose],['前日高値',lv.prevHigh],['前日安値',lv.prevLow]]}
+    else L=[['終値',last(s.c)],['5日線',last(s.sma5)],['25日線',last(s.sma25)],['75日線',last(s.sma75)],['RSI(14)',a.rsi],['25日線乖離',(last(s.c)&&last(s.sma25))?((last(s.c)/last(s.sma25)-1)*100):null]];
+    $('techLevels').innerHTML=L.map(function(x){var val=x[1]==null?'—':x[0]==='25日線乖離'?((x[1]>0?'+':'')+x[1].toFixed(1)+'%'):x[0]==='RSI(14)'?x[1].toFixed(0):fp(x[1]);
+      return '<div class="stat"><div class="k">'+x[0]+'</div><div class="v">'+val+'</div></div>'}).join('');
+    $('techSigs').innerHTML=a.signals.length?a.signals.map(function(g){var c=g.point>0?'pos':g.point<0?'neg':'zero';
+      return '<li><span class="pt '+c+'">'+(g.point>0?'+':g.point<0?'−':'±')+Math.abs(g.point)+'</span><b>'+esc(g.title)+'</b><span>'+esc(g.detail)+'</span></li>'}).join(''):'<li><span class="pt zero">±0</span><b>目立ったシグナルなし</b><span>判定に使う条件に当てはまるものがありません</span></li>';
+    var lt='';
+    if(techTf==='m5'&&s.t.length){var d=new Date(s.t[s.t.length-1]*1000);lt='最終足 '+(d.getMonth()+1)+'/'+d.getDate()+' '+z2(d.getHours())+':'+z2(d.getMinutes())+'。'}
+    else if(s.t.length){lt='最終日 '+s.t[s.t.length-1].slice(5).replace('-','/')+'。'}
+    $('techNote').textContent=lt+(techData.note||'')+'。判定は条件に当てはまったシグナルの点数を足した機械的な目安で、売買をすすめるものではありません。';
+    renderTechChart();
+  }
+  function niceStep(r){var p=Math.pow(10,Math.floor(Math.log(r)/Math.LN10)),m=r/p;return (m<1.5?1:m<3?2:m<7?5:10)*p}
+  function renderTechChart(){
+    var el=$('techChart'); if(!el||$('techPanel').hidden)return;
+    var W=Math.max(200,el.clientWidth||320), H=el.clientHeight||240, s=techData&&techData[techTf];
+    if(!s||!s.c||!s.c.length){el.innerHTML='<svg width="'+W+'" height="'+H+'"><text class="msg" x="'+(W/2)+'" y="'+(H/2)+'" text-anchor="middle">'+esc(techErr||'データがありません')+'</text></svg>';return}
+    var m5=techTf==='m5', n=s.c.length, padR=50, padT=8, padB=18, lo=Infinity, hi=-Infinity, i;
+    for(i=0;i<n;i++){if(s.h[i]!=null&&s.h[i]>hi)hi=s.h[i];if(s.l[i]!=null&&s.l[i]<lo)lo=s.l[i]}
+    var hl=[];
+    if(m5&&lastLines&&techData.code===techCode){
+      hl=[{v:lastLines.e,c:'h-e'},{v:lastLines.stop,c:'h-s'},{v:lastLines.tp,c:'h-t'}];
+      var span=hi-lo; hl=hl.filter(function(x){return x.v>lo-span*0.5&&x.v<hi+span*0.5}); // 今の値動きから遠すぎるラインは描かない
+      hl.forEach(function(x){if(x.v<lo)lo=x.v;if(x.v>hi)hi=x.v});
+    }
+    if(!(hi>lo)){hi=lo+1}
+    var pad=(hi-lo)*0.06; lo-=pad; hi+=pad;
+    var cw=(W-padR)/n, X=function(i){return i*cw+cw/2}, Y=function(v){return padT+(hi-v)/(hi-lo)*(H-padT-padB)};
+    var g=[], step=niceStep((hi-lo)/4), k0=Math.ceil(lo/step), k1=Math.floor(hi/step), k;
+    for(k=k0;k<=k1;k++){var yv=k*step,yy=Y(yv).toFixed(1);
+      g.push('<line class="gl" x1="0" x2="'+(W-padR)+'" y1="'+yy+'" y2="'+yy+'"/><text class="ax" x="'+(W-padR+4)+'" y="'+(+yy+3)+'">'+fp(Math.round(yv*10)/10)+'</text>')}
+    var brk={};
+    if(m5){
+      for(i=0;i<n;i++){var dt=new Date(s.t[i]*1000), pd=i?new Date(s.t[i-1]*1000):null;
+        if(!pd||dt.getDate()!==pd.getDate()){brk[i]=1;var xx=(i*cw).toFixed(1);
+          if(i)g.push('<line class="sep" x1="'+xx+'" x2="'+xx+'" y1="'+padT+'" y2="'+(H-padB)+'"/>');
+          g.push('<text class="ax" x="'+(+xx+3)+'" y="'+(H-5)+'">'+(dt.getMonth()+1)+'/'+dt.getDate()+'</text>')}}
+    } else {
+      var every=Math.max(1,Math.round(n/4));
+      for(i=0;i<n;i+=every)g.push('<text class="ax" x="'+X(i).toFixed(1)+'" y="'+(H-5)+'" text-anchor="'+(i?'middle':'start')+'">'+s.t[i].slice(5).replace('-','/')+'</text>');
+    }
+    var bw=Math.max(1,Math.min(10,cw*0.65));
+    for(i=0;i<n;i++){var o=s.o[i],c=s.c[i],h=s.h[i],l=s.l[i]; if(o==null||c==null||h==null||l==null)continue;
+      var cls=c>=o?'cu':'cd', x=X(i).toFixed(1), yt=Y(Math.max(o,c)), yb=Y(Math.min(o,c));
+      g.push('<line class="'+cls+'" x1="'+x+'" x2="'+x+'" y1="'+Y(h).toFixed(1)+'" y2="'+Y(l).toFixed(1)+'"/>'+
+        '<rect class="'+cls+'" x="'+(X(i)-bw/2).toFixed(1)+'" y="'+yt.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.max(1,yb-yt).toFixed(1)+'"/>')}
+    function path(arr,cls,cut){if(!arr)return;var d='',pen=false;for(var i=0;i<arr.length;i++){if(arr[i]==null||(cut&&brk[i])){pen=false;if(arr[i]==null)continue}
+      d+=(pen?'L':'M')+X(i).toFixed(1)+' '+Y(arr[i]).toFixed(1);pen=true}
+      if(d)g.push('<path class="'+cls+'" d="'+d+'"/>')}
+    if(m5){path(s.sma25,'l-ma25');path(s.sma5,'l-ma5');path(s.vwap,'l-vwap',true)}
+    else{path(s.sma75,'l-ma75');path(s.sma25,'l-ma25');path(s.sma5,'l-ma5')}
+    // ラベルが重ならないよう、上から順に最低11pxずつ離す
+    hl.sort(function(a,b){return b.v-a.v}); var prevLy=-1e9;
+    hl.forEach(function(x){var yy=Y(x.v), ly=Math.max(yy+3,prevLy+11); prevLy=ly;
+      g.push('<line class="hl '+x.c+'" x1="0" x2="'+(W-padR)+'" y1="'+yy.toFixed(1)+'" y2="'+yy.toFixed(1)+'"/><text class="ht '+x.c+'" x="'+(W-padR+4)+'" y="'+ly.toFixed(1)+'">'+fp(x.v)+'</text>')});
+    el.innerHTML='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+(m5?'5分足':'日足')+'チャート">'+g.join('')+'</svg>';
+  }
+  var rzT; addEventListener('resize',function(){clearTimeout(rzT);rzT=setTimeout(renderTechChart,150)});
 
   $('x').value=st.mode==='stop'?st.xStop:st.xTp;
   paint(); calc();
