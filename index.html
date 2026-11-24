@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>損切りライン計算</title>
+<meta name="theme-color" content="#F2F4F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F141B" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<style>
+/* Layout: one narrow column; mode/side switches, then entry → stop/tp → shares stacked vertically; the computed line as the single big readout */
+:root{
+  --bg:#F2F4F7; --surface:#FFFFFF; --ink:#17212D; --muted:#5D6B7B; --line:#D6DDE6;
+  --accent:#2453C9; --accent-soft:#E3EAFB; --loss:#C2410C; --loss-soft:#FCE9DF; --gain:#0F7B6C; --gain-soft:#DDF3EF;
+  --warn-bg:#FFF4D6; --warn-ink:#7A5200;
+  --f-body:"Noto Sans JP","IBM Plex Sans JP","Hiragino Sans","Yu Gothic UI",Meiryo,sans-serif;
+  --f-num:"Roboto Mono","IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F141B; --surface:#171E28; --ink:#E6ECF3; --muted:#93A1B3; --line:#2A3544;
+  --accent:#86A8FF; --accent-soft:#1E2A45; --loss:#FF8F62; --loss-soft:#3A2219; --gain:#55D3BE; --gain-soft:#14302C;
+  --warn-bg:#3A2F12; --warn-ink:#F5D27A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F141B; --surface:#171E28; --ink:#E6ECF3; --muted:#93A1B3; --line:#2A3544;
+  --accent:#86A8FF; --accent-soft:#1E2A45; --loss:#FF8F62; --loss-soft:#3A2219; --gain:#55D3BE; --gain-soft:#14302C;
+  --warn-bg:#3A2F12; --warn-ink:#F5D27A; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;-webkit-text-size-adjust:100%}
+button,input{touch-action:manipulation}
+[hidden]{display:none!important}
+.seg.three{grid-template-columns:repeat(3,1fr)}
+.pctrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fixed{display:flex;align-items:center;justify-content:space-between;gap:6px;border:1.5px solid var(--line);border-radius:8px;background:var(--bg);padding:8px 12px}
+.fk{font-size:13px;color:var(--muted)}
+.fv{font-family:var(--f-num);font-size:22px;font-weight:600}
+.fv.loss{color:var(--loss)} .fv.gain{color:var(--gain)}
+.pfx,.sfx{display:flex;align-items:center;padding:0 10px;font-family:var(--f-num);font-weight:600;font-size:18px;color:var(--muted)}
+.pfx.loss{color:var(--loss)} .pfx.gain{color:var(--gain)}
+#row2{margin-top:2px}
+#row2 .k2{font-size:13px;color:var(--muted);margin-right:4px}
+.big2{font-family:var(--f-num);font-size:30px;font-weight:600;line-height:1.1;color:var(--gain)}
+.yen2{font-size:14px;font-weight:700;color:var(--gain)}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:520px;margin:0 auto;padding-block:20px 40px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:14px}
+h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.02em}
+.sub{color:var(--muted);font-size:13px;margin:2px 0 0}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:3px;gap:3px;margin-bottom:10px}
+.seg button{border:0;background:transparent;color:var(--muted);font-family:var(--f-body);font-size:13px;font-weight:500;padding:8px 6px;border-radius:7px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+#sideLong[aria-pressed="true"]{background:var(--gain-soft);color:var(--gain)}
+#sideShort[aria-pressed="true"]{background:var(--loss-soft);color:var(--loss)}
+.inputs{display:flex;flex-direction:column;gap:12px;margin-top:4px}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;letter-spacing:.04em}
+.lblrow{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px}
+.lblrow label{margin:0}
+.lblrow .auto{display:flex;align-items:center;gap:6px;color:var(--ink);font-size:12px;cursor:pointer;letter-spacing:0}
+.box{display:flex;align-items:stretch;border:1.5px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg)}
+.box:focus-within{border-color:var(--accent)}
+.box input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font-family:var(--f-num);font-size:24px;font-weight:600;padding:8px 6px;text-align:center;outline:none}
+.box input[readonly]{color:var(--accent)}
+.box.is-auto{border-style:dashed}
+.step{border:0;background:transparent;color:var(--muted);font-size:20px;width:44px;cursor:pointer}
+.step:hover:not(:disabled){background:var(--accent-soft);color:var(--accent)}
+.step:disabled{opacity:.3;cursor:default}
+.step:focus-visible,.chip:focus-visible,.copy:focus-visible,.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.hint{font-size:12px;color:var(--muted);margin:5px 0 0;min-height:1.5em}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center}
+.chips .lbl{font-size:12px;color:var(--muted);margin-right:2px}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:4px 11px;font-family:var(--f-num);font-size:13px;cursor:pointer}
+.chip:hover{border-color:var(--accent)}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.result{border-width:2px}
+.result.is-stop{border-color:var(--loss)} .result.is-tp{border-color:var(--gain)}
+.result .head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.tag{font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;letter-spacing:.04em}
+.tag.long{background:var(--gain-soft);color:var(--gain)}
+.tag.short{background:var(--loss-soft);color:var(--loss)}
+.big-row{display:flex;align-items:baseline;gap:8px;margin:6px 0 2px;flex-wrap:wrap}
+.big{font-family:var(--f-num);font-size:52px;font-weight:600;line-height:1.1;letter-spacing:-.01em}
+.yen{font-size:18px;font-weight:700}
+.is-stop .big,.is-stop .yen{color:var(--loss)} .is-tp .big,.is-tp .yen{color:var(--gain)}
+.copy{margin-left:auto;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:var(--f-body)}
+.copy:hover{border-color:var(--accent)}
+.order{font-size:13px;color:var(--muted);margin:4px 0 0}
+.order b{color:var(--ink);font-weight:600}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.stat{background:var(--bg);border-radius:8px;padding:8px 10px;min-width:0}
+.stat .k{font-size:11px;color:var(--muted);letter-spacing:.04em}
+.stat .v{font-family:var(--f-num);font-weight:600;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v.gain{color:var(--gain)} .v.loss{color:var(--loss)}
+.warn{background:var(--warn-bg);color:var(--warn-ink);border-radius:8px;padding:8px 11px;font-size:13px;margin-top:10px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--line)}
+th{font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.04em}
+th:first-child,td:first-child{text-align:left}
+tr.sel td{background:var(--accent-soft)}
+tr:last-child td{border-bottom:0}
+.rowtap{cursor:pointer}
+h2{font-size:13px;margin:0 0 8px;color:var(--muted);font-weight:500;letter-spacing:.04em}
+details summary{cursor:pointer;font-size:13px;color:var(--muted)}
+.set{display:flex;flex-direction:column;gap:12px;margin-top:10px}
+.set .box input{font-size:17px}
+.check{display:flex;align-items:center;gap:8px;font-size:13px}
+.note{font-size:12px;color:var(--muted);margin:0}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>損切りライン計算</h1>
+    <p class="sub" id="subText">エントリー価格と損切り価格を入れると、利確ラインがすぐに出ます</p>
+  </header>
+
+  <section class="panel">
+    <div class="seg three" role="group" aria-label="計算のしかた">
+      <button type="button" id="modePct">％で出す</button>
+      <button type="button" id="modeTp">損切り→利確</button>
+      <button type="button" id="modeStop">利確→損切り</button>
+    </div>
+    <div class="seg" role="group" aria-label="売買の向き">
+      <button type="button" id="sideLong">買い</button>
+      <button type="button" id="sideShort">空売り</button>
+    </div>
+    <div class="inputs">
+      <div class="field">
+        <label for="entry">エントリー価格（円）</label>
+        <div class="box">
+          <button class="step" type="button" data-t="entry" data-d="-1" aria-label="エントリーを1呼値下げる">−</button>
+          <input id="entry" inputmode="decimal" autocomplete="off" value="2643" enterkeyhint="next">
+          <button class="step" type="button" data-t="entry" data-d="1" aria-label="エントリーを1呼値上げる">＋</button>
+        </div>
+      </div>
+      <div class="field" id="pctField">
+        <label>損切り幅 ／ 利確幅（エントリーからの％・固定）</label>
+        <div class="pctrow">
+          <div class="fixed"><span class="fk">損切り</span><span class="fv loss">−0.3%</span></div>
+          <div class="fixed"><span class="fk">利確</span><span class="fv gain">+0.2%</span></div>
+        </div>
+        <p class="hint" id="pctHint"></p>
+      </div>
+      <div class="field" id="xField">
+        <label for="x" id="xLabel">損切り価格（円）</label>
+        <div class="box">
+          <button class="step" type="button" data-t="x" data-d="-1" aria-label="1呼値下げる">−</button>
+          <input id="x" inputmode="decimal" autocomplete="off" value="2635" enterkeyhint="done">
+          <button class="step" type="button" data-t="x" data-d="1" aria-label="1呼値上げる">＋</button>
+        </div>
+        <div class="chips" id="widthChips"><span class="lbl" id="widthLbl">損切り幅</span></div>
+      </div>
+      <div class="field">
+        <div class="lblrow">
+          <label for="shares">株数</label>
+          <label class="auto"><input type="checkbox" id="auto" checked> 自動で決める</label>
+        </div>
+        <div class="box" id="sharesBox">
+          <button class="step" type="button" data-t="shares" data-d="-100" aria-label="100株減らす">−</button>
+          <input id="shares" inputmode="numeric" value="100">
+          <button class="step" type="button" data-t="shares" data-d="100" aria-label="100株増やす">＋</button>
+        </div>
+        <p class="hint" id="autoHint"></p>
+      </div>
+    </div>
+    <div class="chips" id="rrChips"><span class="lbl">リスクリワード</span></div>
+  </section>
+
+  <section class="panel result is-tp" id="result" aria-live="polite">
+    <div class="head">
+      <span style="font-size:13px;color:var(--muted)" id="bigLabel">利確ライン</span>
+      <span class="tag long" id="dirTag">買い</span>
+    </div>
+    <div class="big-row">
+      <span class="big" id="big">—</span><span class="yen">円</span>
+      <button class="copy" type="button" id="copyBtn">コピー</button>
+    </div>
+    <div class="big-row" id="row2" hidden>
+      <span class="k2">利確ライン</span><span class="big2" id="big2">—</span><span class="yen2">円</span>
+    </div>
+    <p class="order" id="orderText"></p>
+    <div class="stats">
+      <div class="stat"><div class="k">利確したら</div><div class="v gain" id="sGain">—</div></div>
+      <div class="stat"><div class="k">損切りしたら</div><div class="v loss" id="sLoss">—</div></div>
+      <div class="stat"><div class="k">株数</div><div class="v" id="sShares">—</div></div>
+      <div class="stat"><div class="k" id="needK">必要資金</div><div class="v" id="sNeed">—</div></div>
+    </div>
+    <div id="warns"></div>
+  </section>
+
+  <section class="panel" id="tblPanel">
+    <h2 id="tblTitle">リスクリワード別の利確ライン（タップで切り替え）</h2>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>比率</th><th id="th1">利確</th><th id="th2">1株の利益</th><th id="th3">損益</th></tr></thead>
+        <tbody id="rrTable"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <details id="settings">
+      <summary>設定（資金・許容損失・呼値）</summary>
+      <div class="set">
+        <div class="field">
+          <label for="fund">資金（円）</label>
+          <div class="box"><input id="fund" inputmode="numeric" value="500000"></div>
+        </div>
+        <div class="field">
+          <label for="riskPct">1回の許容損失（資金の％）</label>
+          <div class="box">
+            <button class="step" type="button" data-t="riskPct" data-d="-0.5" aria-label="0.5%下げる">−</button>
+            <input id="riskPct" inputmode="decimal" value="1">
+            <button class="step" type="button" data-t="riskPct" data-d="0.5" aria-label="0.5%上げる">＋</button>
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" id="t500"> TOPIX500銘柄（呼値が細かい：0.1円・0.5円単位）</label>
+        <p class="note">株数の自動計算：許容損失 ÷ 1株の損失 で出した株数と、資金で買える株数（空売りは保証金の約3.3倍まで）の少ないほうを、100株単位で切り捨てます。<br>出てくる値段は呼値に合わせて丸めています（比率が設定を下回らない向き）。手数料は含みません。</p>
+      </div>
+    </details>
+  </section>
+</div>
+
+<script>
+(function(){
+  var RRS=[1,1.5,2,3], WIDTHS=[5,10,15,20,30];
+  var $=function(id){return document.getElementById(id)};
+  var st={mode:'pct',side:'long',rr:1.5,shares:100,auto:true,riskPct:1,fund:500000,t500:false,xTp:'2635',xStop:'2660',stopPct:0.3,tpPct:0.2};
+  try{
+    var s=JSON.parse(localStorage.getItem('slcalc3')||'null');
+    if(!s){ // 旧版の設定は資金・許容損失などだけ引き継ぎ、計算モードは新しい初期値（％）にする
+      s=JSON.parse(localStorage.getItem('slcalc2')||'{}'); delete s.mode; delete s.rr;
+    }
+    for(var k in s){if(k in st)st[k]=s[k]}
+  }catch(e){}
+  st.stopPct=0.3; st.tpPct=0.2; // 損切り・利確の％は固定（画面からは変えられない）
+  function save(){try{localStorage.setItem('slcalc3',JSON.stringify(st))}catch(e){}}
+
+  $('shares').value=st.shares; $('fund').value=st.fund; $('riskPct').value=st.riskPct; $('t500').checked=st.t500; $('auto').checked=st.auto;
+
+  function num(v){v=String(v).replace(/[０-９．]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0xFEE0)}).replace(/[,，\s円%％]/g,'');var n=parseFloat(v);return isFinite(n)?n:NaN}
+  function tick(p){
+    if(st.t500){
+      if(p<=1000)return .1; if(p<=3000)return .5; if(p<=10000)return 1; if(p<=30000)return 5;
+      if(p<=100000)return 10; if(p<=300000)return 50; if(p<=1000000)return 100; if(p<=3000000)return 500;
+      if(p<=10000000)return 1000; if(p<=30000000)return 5000; return 10000;
+    }
+    if(p<=3000)return 1; if(p<=5000)return 5; if(p<=30000)return 10; if(p<=50000)return 50;
+    if(p<=300000)return 100; if(p<=500000)return 500; if(p<=3000000)return 1000; if(p<=5000000)return 5000;
+    if(p<=30000000)return 10000; if(p<=50000000)return 50000; return 100000;
+  }
+  function rnd(p,up){var t=tick(p),q=p/t;q=up?Math.ceil(q-1e-9):Math.floor(q+1e-9);return Math.round(q*t*10)/10}
+  function fp(n){return n.toLocaleString('ja-JP',{maximumFractionDigits:1})}
+  function raw(n){return String(Math.round(n*10)/10)}
+  function fy(n){return (n<0?'−':'')+'¥'+Math.round(Math.abs(n)).toLocaleString('ja-JP')}
+  function fs(n){return n.toLocaleString('ja-JP')+'株'}
+
+  WIDTHS.forEach(function(w){var b=document.createElement('button');b.type='button';b.className='chip';b.dataset.w=w;
+    b.onclick=function(){var e=num($('entry').value);if(!isFinite(e))return;var dn=(st.mode==='tp')===(st.side==='long');$('x').value=raw(dn?e-w:e+w);calc()};
+    $('widthChips').appendChild(b)});
+  var rrBtns=RRS.map(function(r){var b=document.createElement('button');b.type='button';b.className='chip';b.textContent='1:'+r;
+    b.onclick=function(){st.rr=r;save();calc()};$('rrChips').appendChild(b);return b});
+
+  function setMode(m){
+    if(m===st.mode)return;
+    if(st.mode==='tp')st.xTp=$('x').value;else if(st.mode==='stop')st.xStop=$('x').value;
+    st.mode=m; if(m!=='pct')$('x').value=m==='tp'?st.xTp:st.xStop; save(); paint(); calc();
+  }
+  function setSide(sd){
+    if(sd===st.side)return; var e=num($('entry').value), x=num($('x').value);
+    st.side=sd; if(st.mode!=='pct'&&e>0&&x>0)$('x').value=raw(2*e-x); save(); paint(); calc();
+  }
+  function paint(){
+    var pct=st.mode==='pct', tp=st.mode==='tp';
+    $('modePct').setAttribute('aria-pressed',pct?'true':'false');
+    $('modeTp').setAttribute('aria-pressed',tp?'true':'false');
+    $('modeStop').setAttribute('aria-pressed',st.mode==='stop'?'true':'false');
+    $('xField').hidden=pct; $('pctField').hidden=!pct; $('rrChips').hidden=pct; $('tblPanel').hidden=pct; $('row2').hidden=!pct;
+    $('sideLong').setAttribute('aria-pressed',st.side==='long'?'true':'false');
+    $('sideShort').setAttribute('aria-pressed',st.side==='short'?'true':'false');
+    $('xLabel').textContent=tp?'損切り価格（円）':'利確価格（円）';
+    $('subText').textContent=pct?'エントリー価格を入れると、損切り−'+st.stopPct+'%・利確+'+st.tpPct+'%のラインがすぐに出ます'
+      :tp?'エントリー価格と損切り価格を入れると、利確ラインがすぐに出ます':'エントリー価格と利確価格を入れると、損切りラインがすぐに出ます';
+    $('widthLbl').textContent=tp?'損切り幅':'利確幅';
+    var dn=tp===(st.side==='long');
+    document.querySelectorAll('#widthChips .chip').forEach(function(b){b.textContent=(dn?'−':'+')+b.dataset.w;
+      b.setAttribute('aria-label',(tp?'損切りをエントリー':'利確をエントリー')+(dn?'−':'＋')+b.dataset.w+'円にする')});
+    $('bigLabel').textContent=(tp&&!pct)?'利確ライン':'損切りライン';
+    $('result').className='panel result '+((tp&&!pct)?'is-tp':'is-stop');
+    $('tblTitle').textContent='リスクリワード別の'+(tp?'利確':'損切り')+'ライン（タップで切り替え）';
+    $('th1').textContent=tp?'利確':'損切り';
+    $('th2').textContent=tp?'1株の利益':'1株の損失';
+    var a=$('auto').checked;
+    $('shares').readOnly=a; $('sharesBox').className='box'+(a?' is-auto':'');
+    document.querySelectorAll('#sharesBox .step').forEach(function(b){b.disabled=a});
+  }
+  $('modeTp').onclick=function(){setMode('tp')};
+  $('modeStop').onclick=function(){setMode('stop')};
+  $('sideLong').onclick=function(){setSide('long')};
+  $('sideShort').onclick=function(){setSide('short')};
+
+  function solve(e,x,r){
+    var long=st.side==='long';
+    if(st.mode==='pct'){ // 損切りは呼値で建値寄りに丸めて％以内、利確は建値から遠い側に丸めて％以上
+      var sp=st.stopPct/100, tq=st.tpPct/100;
+      var stop=long?rnd(e*(1-sp),true):rnd(e*(1+sp),false), tpv=long?rnd(e*(1+tq),true):rnd(e*(1-tq),false);
+      return {long:long, ok:sp>0&&tq>0&&(long?(stop<e&&tpv>e):(stop>e&&tpv<e)), stop:stop, tp:tpv};
+    }
+    if(st.mode==='tp'){var risk=Math.abs(e-x);
+      return {long:long, ok:long?x<e:x>e, stop:x, tp: long?rnd(e+risk*r,true):rnd(e-risk*r,false)};}
+    var rew=Math.abs(x-e);
+    return {long:long, ok:long?x>e:x<e, tp:x, stop: long?rnd(e-rew/r,true):rnd(e+rew/r,false)};
+  }
+
+  function blank(msg,warn){
+    $('big').textContent='—'; $('big2').textContent='—'; $('pctHint').textContent=''; $('orderText').textContent=msg||'';
+    ['sGain','sLoss','sShares','sNeed'].forEach(function(id){$(id).textContent='—'});
+    $('warns').innerHTML=warn?'<div class="warn">'+warn+'</div>':''; $('autoHint').textContent='';
+  }
+
+  function calc(){
+    rrBtns.forEach(function(b,i){b.setAttribute('aria-pressed',RRS[i]===st.rr?'true':'false')});
+    st.fund=Math.max(0,num($('fund').value)||0); st.riskPct=Math.max(0,num($('riskPct').value)||0);
+    st.t500=$('t500').checked; st.auto=$('auto').checked;
+    if(!st.auto) st.shares=Math.max(0,Math.round(num($('shares').value)||0));
+    if(st.mode==='tp')st.xTp=$('x').value;else if(st.mode==='stop')st.xStop=$('x').value;
+    save(); paint();
+    var pctMode=st.mode==='pct';
+    var e=num($('entry').value), x=num($('x').value), warns=[], tpMode=st.mode==='tp';
+    var tb=$('rrTable'); tb.innerHTML='';
+    if(pctMode){
+      if(!(e>0)){ blank('エントリー価格を入れてください'); return; }
+    } else if(!(e>0)||!(x>0)||e===x){ blank('エントリー価格と'+(tpMode?'損切り':'利確')+'価格を入れてください'); return; }
+    var o=solve(e,x,st.rr);
+    if(pctMode&&!o.ok){
+      blank('','この値段だと、幅が呼値1つ分に届きません。設定の「TOPIX500銘柄」を確認してください。');
+      return;
+    }
+    if(!o.ok){
+      var lg=st.side==='long';
+      blank('',(lg?'買い':'空売り')+'なら'+(tpMode?'損切り':'利確')+'価格はエントリーより'+((tpMode===lg)?'下':'上')+'に入れてください（または「買い／空売り」を切り替えてください）。');
+      return;
+    }
+    var reward=Math.abs(o.tp-e), risk=Math.abs(e-o.stop), maxLoss=st.fund*st.riskPct/100;
+    $('dirTag').textContent=o.long?'買い':'空売り'; $('dirTag').className='tag '+(o.long?'long':'short');
+
+    if(st.auto){
+      if(risk>0){
+        var byLoss=Math.floor(maxLoss/risk/100)*100;
+        var byCap=Math.floor((o.long?st.fund:st.fund/0.3)/e/100)*100;
+        st.shares=Math.max(0,Math.min(byLoss,byCap)); $('shares').value=st.shares; save();
+        $('autoHint').textContent='許容損失 '+fy(maxLoss)+' なら最大 '+fs(byLoss)+' ／ '+(o.long?'資金':'保証金')+'で最大 '+fs(byCap);
+        if(st.shares===0) warns.push(byLoss===0
+          ? '100株でも損失（'+fy(risk*100)+'）が許容損失（'+fy(maxLoss)+'）を超えます。見送るか、損切り幅を狭めてください。'
+          : '資金が100株分に足りません（必要 '+fy(e*100*(o.long?1:0.3))+'）。');
+      } else { $('autoHint').textContent=''; }
+    } else { $('autoHint').textContent='手動入力中'; }
+
+    $('th3').textContent=fs(st.shares)+'の'+(tpMode?'利益':'損失');
+    if(!pctMode) RRS.forEach(function(r){
+      var oo=solve(e,x,r), line=tpMode?oo.tp:oo.stop, d=Math.abs(line-e), tr=document.createElement('tr');
+      tr.className='rowtap'+(r===st.rr?' sel':''); tr.onclick=function(){st.rr=r;save();calc()};
+      tr.innerHTML='<td class="num">1:'+r+'</td><td class="num">'+fp(line)+'</td><td class="num">'+(d>0?(tpMode?'+':'−')+fp(d):'—')+'</td><td class="num">'+(d>0?(tpMode?'+':'')+fy((tpMode?1:-1)*d*st.shares):'—')+'</td>';
+      tb.appendChild(tr);
+    });
+
+    if(risk<=0||reward<=0){
+      $('big').textContent='—'; $('orderText').textContent='';
+      warns.push('幅が狭すぎて、この比率では値段を置けません。比率を下げるか、幅を広げてください。');
+    } else {
+      $('big').textContent=fp((tpMode&&!pctMode)?o.tp:o.stop);
+      $('big2').textContent=fp(o.tp);
+      var actual=reward/risk;
+      $('orderText').innerHTML=(o.long?'返済売り':'返済買い')+'：逆指値付通常注文　指値 <b class="num">'+fp(o.tp)+'円</b> ／ 逆指値 <b class="num">'+fp(o.stop)+'円'+(o.long?'以下':'以上')+'</b>で成行'+
+        (!pctMode&&Math.abs(actual-st.rr)>0.05?'　<span>（丸め後の実比率 1:'+actual.toFixed(2)+'）</span>':'');
+      if(pctMode){
+        $('pctHint').textContent='丸め後：損切り −'+(risk/e*100).toFixed(2)+'% ／ 利確 +'+(reward/e*100).toFixed(2)+'%　・この幅でトントンになる勝率 '+(risk/(risk+reward)*100).toFixed(1)+'%（手数料なし）';
+      }
+    }
+    var gain=reward*st.shares, loss=risk*st.shares, need=e*st.shares;
+    $('sGain').textContent=reward>0?'+'+fy(gain):'—'; $('sLoss').textContent=risk>0?fy(-loss):'—';
+    $('sShares').textContent=fs(st.shares); $('sNeed').textContent=fy(need);
+    $('needK').textContent=o.long?'必要資金':'建玉金額';
+    if(!st.auto){
+      if(st.fund>0&&o.long&&need>st.fund) warns.push('現物だと資金が足りません（必要 '+fy(need)+' ／ 資金 '+fy(st.fund)+'）。株数を減らしてください。');
+      if(st.fund>0&&!o.long&&need>st.fund/0.3) warns.push('建玉金額が保証金の約3.3倍（'+fy(st.fund/0.3)+'）を超えています。信用取引は委託保証金率30%が目安です。');
+      if(st.fund>0&&loss>maxLoss) warns.push('損切りした場合の損失が許容損失（資金の'+st.riskPct+'%＝'+fy(maxLoss)+'）を超えています。');
+      if(st.shares%100!==0) warns.push('日本株は通常100株単位です。');
+    }
+    $('warns').innerHTML=warns.map(function(w){return '<div class="warn">'+w+'</div>'}).join('');
+  }
+
+  document.querySelectorAll('.step').forEach(function(b){b.onclick=function(){
+    var id=b.dataset.t,d=+b.dataset.d,el=$(id),v=num(el.value);if(!isFinite(v))v=0;
+    if(id==='shares'){el.value=Math.max(0,v+d)}
+    else if(id==='riskPct'){el.value=String(Math.max(0,Math.round((v+d)*10)/10))}
+    else{var tk=tick(v);el.value=raw(Math.max(tk,v+d*tk))}
+    calc()}});
+  ['entry','x','shares','fund','riskPct'].forEach(function(id){var el=$(id);el.addEventListener('input',calc);
+    el.addEventListener('focus',function(){try{el.select()}catch(e){}});});
+  $('t500').addEventListener('change',calc);
+  $('auto').addEventListener('change',calc);
+  $('entry').addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();$('x').focus()}});
+  $('x').addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();$('x').blur()}});
+
+  $('copyBtn').onclick=function(){
+    var txt=$('big').textContent.replace(/,/g,''); if(txt==='—')return;
+    var reset=function(){setTimeout(function(){$('copyBtn').textContent='コピー'},1400)};
+    var fallback=function(){var r=document.createRange();r.selectNodeContents($('big'));var sel=getSelection();sel.removeAllRanges();sel.addRange(r);$('copyBtn').textContent='選択しました';reset()};
+    try{navigator.clipboard.writeText(txt).then(function(){$('copyBtn').textContent='コピーしました';reset()},fallback)}catch(e){fallback()}
+  };
+  $('x').value=st.mode==='stop'?st.xStop:st.xTp;
+  paint(); calc();
+  try{$('entry').focus()}catch(e){}
+})();
+</script>
+
+<script>
+if('serviceWorker' in navigator){addEventListener('load',function(){navigator.serviceWorker.register('sw.js')})}
+</script>
+</body>
+</html>
