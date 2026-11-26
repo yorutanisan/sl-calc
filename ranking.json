@@ -1,93 +1,85 @@
 {
- "asof": "2026-11-26T14:34+09:00",
+ "asof": "2026-11-26T15:30+09:00",
  "note": "Yahoo Finance のデータ（約20分遅れ）",
  "items": [
   {
    "code": "9432",
    "name": "NTT",
-   "price": 169.4,
-   "changePct": 0.83,
-   "volume": 113981900,
+   "price": 169.3,
+   "changePct": 0.77,
+   "volume": 156902900,
    "t500": true
   },
   {
    "code": "285A",
    "name": "キオクシアホールディングス",
-   "price": 7895.0,
-   "changePct": 14.5,
-   "volume": 109604400,
+   "price": 7762.0,
+   "changePct": 12.57,
+   "volume": 126102200,
    "t500": true
   },
   {
    "code": "9984",
    "name": "ソフトバンクグループ",
-   "price": 2981.0,
-   "changePct": 10.55,
-   "volume": 83806300,
+   "price": 2894.0,
+   "changePct": 7.32,
+   "volume": 100897600,
    "t500": true
   },
   {
    "code": "5803",
    "name": "フジクラ",
-   "price": 2119.0,
-   "changePct": 2.74,
-   "volume": 63989000,
-   "t500": true
-  },
-  {
-   "code": "8766",
-   "name": "東京海上ホールディングス",
-   "price": 595.9,
-   "changePct": -0.28,
-   "volume": 40022700,
+   "price": 2077.0,
+   "changePct": 0.7,
+   "volume": 76512900,
    "t500": true
   },
   {
    "code": "9434",
    "name": "ソフトバンク",
-   "price": 236.4,
-   "changePct": -0.63,
-   "volume": 36618800,
+   "price": 234.8,
+   "changePct": -1.3,
+   "volume": 69284400,
+   "t500": true
+  },
+  {
+   "code": "8766",
+   "name": "東京海上ホールディングス",
+   "price": 591.1,
+   "changePct": -1.09,
+   "volume": 56667200,
    "t500": true
   },
   {
    "code": "5801",
    "name": "古河電気工業",
-   "price": 1696.5,
-   "changePct": 8.51,
-   "volume": 32894500,
+   "price": 1659.5,
+   "changePct": 6.14,
+   "volume": 38171900,
    "t500": true
   },
   {
    "code": "4062",
    "name": "イビデン",
-   "price": 4778.0,
-   "changePct": 5.9,
-   "volume": 32244000,
-   "t500": true
-  },
-  {
-   "code": "6976",
-   "name": "太陽誘電",
-   "price": 6292.0,
-   "changePct": 7.12,
-   "volume": 22318800,
+   "price": 4668.0,
+   "changePct": 3.46,
+   "volume": 36864200,
    "t500": true
   },
   {
    "code": "8729",
    "name": "ソニーフィナンシャルグループ",
-   "price": 146.8,
-   "changePct": 0.34,
-   "volume": 20469000,
+   "price": 146.4,
+   "changePct": 0.07,
+   "volume": 34754100,
    "t500": true
   },
   {
-   "code": "6857",
-   "name": "アドバンテスト",
-   "price": 25535.0,
-   "changePct": 7.54,
-   "volume": 20200900,
+   "code": "6976",
+   "name": "太陽誘電",
+   "price": 6130.0,
+   "changePct": 4.36,
+   "volume": 26177500,
    "t500": true
   },
   {
@@ -95,71 +87,79 @@
    "name": "ARCHION",
    "price": 250.0,
    "changePct": -0.4,
-   "volume": 18859100,
+   "volume": 25958200,
    "t500": false
-  },
-  {
-   "code": "6981",
-   "name": "村田製作所",
-   "price": 4914.0,
-   "changePct": 6.07,
-   "volume": 18743400,
-   "t500": true
-  },
-  {
-   "code": "8035",
-   "name": "東京エレクトロン",
-   "price": 8027.0,
-   "changePct": 2.58,
-   "volume": 18547900,
-   "t500": true
-  },
-  {
-   "code": "5802",
-   "name": "住友電気工業",
-   "price": 1298.0,
-   "changePct": 5.23,
-   "volume": 18120900,
-   "t500": true
-  },
-  {
-   "code": "5016",
-   "name": "JX金属",
-   "price": 1872.0,
-   "changePct": 8.21,
-   "volume": 17735900,
-   "t500": true
   },
   {
    "code": "5401",
    "name": "日本製鉄",
-   "price": 684.5,
-   "changePct": 0.59,
-   "volume": 17125600,
-   "t500": true
-  },
-  {
-   "code": "8306",
-   "name": "三菱UFJフィナンシャル・グループ",
-   "price": 3149.0,
-   "changePct": 0.86,
-   "volume": 16558700,
-   "t500": true
-  },
-  {
-   "code": "9501",
-   "name": "東京電力ホールディングス",
-   "price": 425.4,
-   "changePct": 2.46,
-   "volume": 16008500,
+   "price": 680.0,
+   "changePct": -0.07,
+   "volume": 25360700,
    "t500": true
   },
   {
    "code": "7201",
    "name": "日産自動車",
-   "price": 256.9,
-   "changePct": 0.35,
-   "volume": 15870400,
+   "price": 255.3,
+   "changePct": -0.27,
+   "volume": 24829200,
+   "t500": true
+  },
+  {
+   "code": "5802",
+   "name": "住友電気工業",
+   "price": 1283.5,
+   "changePct": 4.05,
+   "volume": 24748200,
+   "t500": true
+  },
+  {
+   "code": "8035",
+   "name": "東京エレクトロン",
+   "price": 7871.0,
+   "changePct": 0.59,
+   "volume": 23895000,
+   "t500": true
+  },
+  {
+   "code": "6857",
+   "name": "アドバンテスト",
+   "price": 24830.0,
+   "changePct": 4.57,
+   "volume": 23825700,
+   "t500": true
+  },
+  {
+   "code": "6981",
+   "name": "村田製作所",
+   "price": 4823.0,
+   "changePct": 4.1,
+   "volume": 22932300,
+   "t500": true
+  },
+  {
+   "code": "9501",
+   "name": "東京電力ホールディングス",
+   "price": 422.2,
+   "changePct": 1.69,
+   "volume": 22490000,
+   "t500": true
+  },
+  {
+   "code": "8306",
+   "name": "三菱UFJフィナンシャル・グループ",
+   "price": 3118.0,
+   "changePct": -0.13,
+   "volume": 22307300,
+   "t500": true
+  },
+  {
+   "code": "7011",
+   "name": "三菱重工業",
+   "price": 2622.0,
+   "changePct": -0.23,
+   "volume": 21652600,
    "t500": true
   }
  ]
